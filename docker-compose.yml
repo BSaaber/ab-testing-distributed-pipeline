@@ -1,0 +1,96 @@
+version: '3'
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - '2181:2181'
+
+
+  kafka1:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - '29092:29092'
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka2:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - '29093:29093'
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093,PLAINTEXT_HOST://localhost:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - '8090:8080'
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka1:9092,kafka2:9093
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+    depends_on:
+      - kafka1
+      - kafka2
+
+
+  producer:
+    build: producer/.
+    depends_on:
+      - kafka1
+      - kafka2
+
+  spark-master:
+    image: bitnami/spark:latest
+    command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 --jars jars/clickhouse-jdbc.jar stream.py
+    ports:
+      - "4040:4040"
+    volumes:
+      - ./spark_streaming_jars/clickhouse-jdbc-0.5.0-shaded.jar:/opt/bitnami/spark/jars/clickhouse-jdbc.jar
+      - ./stream.py:/opt/bitnami/spark/stream.py
+    depends_on:
+      - kafka1
+      - kafka2
+      - clickhouse-server
+
+  clickhouse-server:
+    image: yandex/clickhouse-server
+    ports:
+      - '8123:8123'
+    volumes:
+      - ./users.xml:/etc/clickhouse-server/users.d/users.xml
+
+
+  metabase:
+    image: metabase/metabase:latest
+
+    ports:
+      - '3000:3000'
+
+    depends_on:
+      - clickhouse-server
+
+    volumes:
+      # passing clickhouse plugin
+      - './clickhouse.metabase-driver.jar:/plugins/clickhouse.jar'
+
+
