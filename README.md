@@ -41,3 +41,4 @@ Find more information in word file with project report, power point presentation
 - Improve docs, run guide. Include dashboards and table creation into docker. 
 - Play with k8s, deploy the system on cloud.
 - Make system truly scalable (automatically increase amount of workers, brokers). 
+- Add airflow DAG with common spark workers cluster to process data deeply.
